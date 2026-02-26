@@ -321,4 +321,100 @@ public class SparseSetTest
         var set = new SparseSet<TestComponent>();
         Assert.Throws<ArgumentOutOfRangeException>(() => set.Remove(-1));
     }
+
+    // -------------------------------------------------------------------------
+    // Enumerator
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Foreach_EmptySet_DoesNotIterate()
+    {
+        var set = new SparseSet<TestComponent>();
+        int count = 0;
+        foreach (ref TestComponent _ in set) count++;
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public void Foreach_VisitsAllComponents()
+    {
+        var set = new SparseSet<TestComponent>();
+        set.Add(10, new TestComponent(1));
+        set.Add(20, new TestComponent(2));
+        set.Add(30, new TestComponent(3));
+
+        int sum = 0;
+        foreach (ref TestComponent c in set)
+            sum += c.Value;
+
+        Assert.Equal(6, sum);
+    }
+
+    [Fact]
+    public void Foreach_CurrentEntity_MatchesAddedIds()
+    {
+        var set = new SparseSet<TestComponent>();
+        set.Add(10, new TestComponent(10));
+        set.Add(20, new TestComponent(20));
+        set.Add(30, new TestComponent(30));
+
+        // Collect (entityId, value) pairs via enumerator
+        var seen = new List<(int entity, int value)>();
+        var e = set.GetEnumerator();
+        while (e.MoveNext())
+            seen.Add((e.CurrentEntity, e.Current.Value));
+
+        // Values should equal entity IDs (we stored them that way)
+        Assert.All(seen, pair => Assert.Equal(pair.entity, pair.value));
+        Assert.Equal(3, seen.Count);
+    }
+
+    [Fact]
+    public void Foreach_MutationThroughRef_IsReflected()
+    {
+        var set = new SparseSet<TestComponent>();
+        set.Add(1, new TestComponent(0));
+        set.Add(2, new TestComponent(0));
+        set.Add(3, new TestComponent(0));
+
+        // Double every value in-place through the ref
+        foreach (ref TestComponent c in set)
+            c = new TestComponent(c.Value + 10);
+
+        Assert.Equal(10, set[1].Value);
+        Assert.Equal(10, set[2].Value);
+        Assert.Equal(10, set[3].Value);
+    }
+
+    [Fact]
+    public void Foreach_AfterRemove_OnlyVisitsLiveComponents()
+    {
+        var set = new SparseSet<TestComponent>();
+        set.Add(1, new TestComponent(1));
+        set.Add(2, new TestComponent(2));
+        set.Add(3, new TestComponent(3));
+
+        set.Remove(2);
+
+        int count = 0;
+        int sum = 0;
+        foreach (ref TestComponent c in set) { count++; sum += c.Value; }
+
+        Assert.Equal(2, count);
+        Assert.Equal(4, sum); // 1 + 3
+    }
+
+    [Fact]
+    public void Foreach_CrossesDensePageBoundary_VisitsAll()
+    {
+        var set = new SparseSet<TestComponent>();
+        const int n = 200;
+        for (int i = 0; i < n; i++)
+            set.Add(i, new TestComponent(1));
+
+        int count = 0;
+        foreach (ref TestComponent _ in set) count++;
+
+        Assert.Equal(n, count);
+    }
 }

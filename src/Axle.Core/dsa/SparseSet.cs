@@ -27,7 +27,7 @@ public class SparseSet<T> where T : struct
     /// <summary>
     /// Returns true if the entry was inserted, false if it was replaced.
     /// </summary>
-    public bool Add(int index, T component)
+    public bool Add(int index, in T component)
     {
         if (_sparse.TryGet(index, out int existingDense))
         {
@@ -48,6 +48,44 @@ public class SparseSet<T> where T : struct
         if (swapped) _sparse[moved] = removedDense;
         _sparse.Remove(index);
         return true;
+    }
+
+    // ---- Index based iterator ----
+    public int EntityAtDense(int index)
+        => _dense.GetEntityIdUnsafe(index);
+
+    public ref T DataAtDense(int index)
+        => ref _dense[index];
+
+
+    /// <summary>
+    /// Enables <c>foreach (ref T item in set)</c> syntax with zero allocations.
+    /// Use <see cref="Enumerator.CurrentEntity"/> inside the loop to get the entity ID.
+    /// </summary>
+    public Enumerator GetEnumerator() => new Enumerator(this);
+
+    public ref struct Enumerator
+    {
+        private readonly SparseSet<T> _set;
+        private int _index;
+
+        internal Enumerator(SparseSet<T> set)
+        {
+            _set = set;
+            _index = -1;
+        }
+
+        public bool MoveNext()
+        {
+            _index++;
+            return _index < _set.Count;
+        }
+
+        /// <summary>ref T to the current component — mutate directly, no copy.</summary>
+        public readonly ref T Current => ref _set._dense[_index];
+
+        /// <summary>Entity ID that owns the current component.</summary>
+        public readonly int CurrentEntity => _set._dense.GetEntityIdUnsafe(_index);
     }
 
     // Paged dense array
@@ -82,7 +120,7 @@ public class SparseSet<T> where T : struct
             _data[pageIdx] = new T[PageSize];
         }
 
-        public int Add(int entityId, T value)
+        public int Add(int entityId, in T value)
         {
             int denseIndex = Count;
             int pageIdx = denseIndex >> PageShift;
@@ -95,6 +133,9 @@ public class SparseSet<T> where T : struct
             Count++;
             return denseIndex;
         }
+
+        public int GetEntityIdUnsafe(int index) =>
+            _entityIds[index >> PageShift][index & PageMask];
 
         // Swap-remove. Returns the entity ID of the element moved into the gap.
         public int Remove(int denseIndex, out bool didSwap)
