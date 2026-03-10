@@ -64,6 +64,41 @@ public class SparseSet<T> where T : struct
     /// </summary>
     public Enumerator GetEnumerator() => new Enumerator(this);
 
+    /// <summary>
+    /// Iterates the dense storage page-by-page, yielding a <see cref="Span{T}"/> per page.
+    /// Within each page the data is contiguous, enabling JIT vectorization.
+    /// Use <see cref="PageEnumerator.CurrentEntities"/> for the matching entity IDs.
+    /// </summary>
+    public PageEnumerator GetPageEnumerator() => new PageEnumerator(this);
+
+    public ref struct PageEnumerator
+    {
+        private readonly DenseArray _dense;
+        private int _pageIdx;
+        private readonly int _pageCount;
+
+        internal PageEnumerator(SparseSet<T> set)
+        {
+            _dense = set._dense;
+            _pageIdx = -1;
+            _pageCount = set._dense.PageCount;
+        }
+
+        public bool MoveNext()
+        {
+            _pageIdx++;
+            return _pageIdx < _pageCount;
+        }
+
+        /// <summary>Contiguous span of components in the current page. Mutate directly.</summary>
+        public Span<T> CurrentData => _dense.GetPageData(_pageIdx);
+
+        /// <summary>Entity IDs that correspond 1-to-1 with <see cref="CurrentData"/>.</summary>
+        public ReadOnlySpan<int> CurrentEntities => _dense.GetPageEntities(_pageIdx);
+
+        public PageEnumerator GetEnumerator() => this;
+    }
+
     public ref struct Enumerator
     {
         private readonly SparseSet<T> _set;
@@ -103,9 +138,27 @@ public class SparseSet<T> where T : struct
 
         public int Count { get; private set; }
 
+        public int PageCount => Count == 0 ? 0 : (Count - 1 >> PageShift) + 1;
+
         // ref T return is stable: the underlying page is never moved.
         public ref T this[int denseIndex]
             => ref _data[denseIndex >> PageShift][denseIndex & PageMask];
+
+        /// <summary>Returns the slice of component data that is populated in this page.</summary>
+        public Span<T> GetPageData(int pageIdx)
+        {
+            int start = pageIdx << PageShift;
+            int count = Math.Min(PageSize, Count - start);
+            return _data[pageIdx].AsSpan(0, count);
+        }
+
+        /// <summary>Returns the matching entity IDs for the same page slice.</summary>
+        public ReadOnlySpan<int> GetPageEntities(int pageIdx)
+        {
+            int start = pageIdx << PageShift;
+            int count = Math.Min(PageSize, Count - start);
+            return _entityIds[pageIdx].AsSpan(0, count);
+        }
 
         private void EnsurePage(int pageIdx)
         {

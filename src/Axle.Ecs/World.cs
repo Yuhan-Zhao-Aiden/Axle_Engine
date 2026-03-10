@@ -104,6 +104,15 @@ public class World
         return (ComponentStore<T>) store;
     }
 
+    public IComponentStore Store(Type type)
+    {
+        if (!_stores.TryGetValue(type, out var store))
+             throw new StoreNotRegisteredException(
+                $"Component store for {type.Name} is not registered."
+            );
+        return store;           
+    }
+
     // ---- Components ----
     public ref T Add<T>(EntityId e) where T : struct, IComponent
     {
@@ -127,6 +136,14 @@ public class World
             throw new InvalidEntityException($"Entity {e.Index} is not alive");
 
         return Store<T>().RemoveByEntityIndex(e.Index);
+    }
+
+    public bool RemoveByType(EntityId e, Type componentType)
+    {
+        if (!IsAlive(e))
+            throw new InvalidEntityException($"Entity {e.Index} is not alive");
+
+        return Store(componentType).RemoveByEntityIndex(e.Index);
     }
 
     public bool Has<T>(EntityId e) where T : struct, IComponent
