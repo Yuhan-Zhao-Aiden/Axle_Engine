@@ -4,6 +4,11 @@ using Axle.Ecs;
 using Axle.Core.AxleMath;
 
 // Test-local components
+file struct Position : IComponent
+{
+    public Vector2f Value;
+    public Position(float x, float y) => Value = new Vector2f(x, y);
+}
 file struct Velocity : IComponent { public Vector2f Value; }
 
 public class CommandBufferTest

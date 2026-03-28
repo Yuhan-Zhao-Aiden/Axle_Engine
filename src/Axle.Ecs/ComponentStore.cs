@@ -43,6 +43,107 @@ public readonly ref struct DenseView<T> where T : struct, IComponent
     public SparseSet<T>.PageEnumerator Pages => _store.GetPageEnumerator();
 }
 
+/// <summary>
+/// The iterated value yielded by <see cref="JoinView{T1,T2}"/>.
+/// Holds <c>ref</c> fields pointing directly into the stores — no copies.
+/// </summary>
+public ref struct JoinItem<T1, T2>
+    where T1 : struct, IComponent
+    where T2 : struct, IComponent
+{
+    public ref T1 Component1;
+    public ref T2 Component2;
+    public int Entity;
+}
+
+public readonly ref struct JoinView<T1, T2>
+    where T1 : struct, IComponent
+    where T2 : struct, IComponent
+{
+    private readonly ComponentStore<T1> _s1;
+    private readonly ComponentStore<T2> _s2;
+    private readonly bool _drivenByT1;
+
+    internal JoinView(ComponentStore<T1> s1, ComponentStore<T2> s2)
+    {
+        _s1 = s1;
+        _s2 = s2;
+        _drivenByT1 = s1.Count <= s2.Count;
+    }
+
+    public Enumerator GetEnumerator() => new(_s1, _s2, _drivenByT1);
+
+    public ref struct Enumerator
+    {
+        private readonly ComponentStore<T1> _s1;
+        private readonly ComponentStore<T2> _s2;
+        private readonly bool _drivenByT1;
+        private readonly int _count;
+        private int _denseIndex;
+        private int _currentEntity;
+
+        internal Enumerator(ComponentStore<T1> s1, ComponentStore<T2> s2, bool drivenByT1)
+        {
+            _s1 = s1;
+            _s2 = s2;
+            _drivenByT1 = drivenByT1;
+            _count = drivenByT1 ? s1.Count : s2.Count;
+            _denseIndex = -1;
+            _currentEntity = -1;
+        }
+
+        public bool MoveNext()
+        {
+            while (++_denseIndex < _count)
+            {
+                _currentEntity = _drivenByT1
+                    ? _s1.EntityAtDense(_denseIndex)
+                    : _s2.EntityAtDense(_denseIndex);
+
+                if (_drivenByT1 ? _s2.HasEntityIndex(_currentEntity)
+                                : _s1.HasEntityIndex(_currentEntity))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Entity index (sparse key) of the current matched entity.</summary>
+        public int CurrentEntity => _currentEntity;
+
+        /// <summary>
+        /// The current matched pair. Both component refs point directly into the stores.
+        /// </summary>
+        public JoinItem<T1, T2> Current
+        {
+            get
+            {
+                JoinItem<T1, T2> item = new() { Entity = _currentEntity };
+                if (_drivenByT1)
+                {
+                    item.Component1 = ref _s1.ComponentAtDense(_denseIndex);
+                    item.Component2 = ref _s2.GetByEntityIndex(_currentEntity);
+                }
+                else
+                {
+                    item.Component1 = ref _s1.GetByEntityIndex(_currentEntity);
+                    item.Component2 = ref _s2.ComponentAtDense(_denseIndex);
+                }
+                return item;
+            }
+        }
+
+        /// <summary>Ref to the T1 component — mutate directly, no copy.</summary>
+        public ref T1 Component1 => ref (_drivenByT1
+            ? ref _s1.ComponentAtDense(_denseIndex)
+            : ref _s1.GetByEntityIndex(_currentEntity));
+
+        /// <summary>Ref to the T2 component — mutate directly, no copy.</summary>
+        public ref T2 Component2 => ref (_drivenByT1
+            ? ref _s2.GetByEntityIndex(_currentEntity)
+            : ref _s2.ComponentAtDense(_denseIndex));
+    }
+}
+
 public class ComponentStore<T> : IComponentStore where T : struct, IComponent
 {
     public delegate void RefAction<TValue>(int entity, ref TValue value);
@@ -52,6 +153,11 @@ public class ComponentStore<T> : IComponentStore where T : struct, IComponent
 
     internal int EntityAtDense(int i) => _set.EntityAtDense(i);
     internal ref T ComponentAtDense(int i) => ref _set.DataAtDense(i);
+
+    /// <summary>
+    /// Unchecked sparse lookup — caller must have confirmed HasEntityIndex first.
+    /// </summary>
+    internal ref T GetByEntityIndex(int entityIndex) => ref _set.GetUnsafe(entityIndex);
     
     public bool RemoveByEntityIndex(int entityIndex)
         => _set.Remove(entityIndex);

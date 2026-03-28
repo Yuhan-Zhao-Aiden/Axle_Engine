@@ -3,6 +3,13 @@
 using Axle.Ecs;
 using Axle.Core.AxleMath;
 
+// Test-local component matching the old Position shape
+file struct Position : IComponent
+{
+    public Vector2f Value;
+    public Position(float x, float y) => Value = new Vector2f(x, y);
+}
+
 public class EcsTest 
 {
     [Fact]

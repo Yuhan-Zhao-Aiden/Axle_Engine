@@ -166,4 +166,8 @@ public class World
     public DenseView<T> Query<T>() where T : struct, IComponent
         => Store<T>().Dense();
 
+    public JoinView<T1, T2> Query<T1, T2>()
+        where T1 : struct, IComponent
+        where T2 : struct, IComponent
+        => new JoinView<T1, T2>(Store<T1>(), Store<T2>());
 }

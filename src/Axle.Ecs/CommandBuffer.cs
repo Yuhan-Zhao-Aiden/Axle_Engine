@@ -48,12 +48,7 @@ public class CommandBuffer
         }
     }
 
-    /// <summary>
-    /// Applies all recorded commands to <paramref name="world"/> in deterministic order,
-    /// then resets the buffer.
-    /// Phases: (1) Create, (2) Add/Remove, (3) Destroy.
-    /// Destroy-wins: entities slated for destruction are skipped during Add/Remove.
-    /// </summary>
+
     public void Playback(World world)
     {
 
@@ -277,4 +272,9 @@ public readonly struct Target
     public readonly bool IsTemp { get; init; }
     public readonly EntityId Entity { get; init; }
     public readonly TempEntityId Temp { get; init; }
+
+    public static Target CreateReal(EntityId real)
+        => new Target { Entity = real };
+    public static Target CreateTemp(TempEntityId temp)
+        => new Target { IsTemp = true, Temp = temp };
 }
