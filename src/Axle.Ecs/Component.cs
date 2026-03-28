@@ -1,13 +1,33 @@
 namespace Axle.Ecs;
 
 using Axle.Core.AxleMath;
+using Axle.Core.Utility;
 
 public interface IComponent { }
 
-public struct Position : IComponent
+public struct Transform : IComponent
 {
-    public Vector2f Value { get; set; }
+    public Vector2f Position;
+    public float Rotation;
+    public Vector2f Scale;
 
-    public Position(Vector2f value) => Value = value;
-    public Position(float x, float y) => Value = new Vector2f(x, y);
+    public Transform(Vector2f position, float rotation = 0f)
+    {
+        Position = position;
+        Rotation = rotation;
+        Scale = new Vector2f(1f, 1f);
+    }
+
+}
+
+public struct RenderRect : IComponent
+{
+    public Vector2f Dimension;
+    public Color4 Color;
+
+    public RenderRect(Vector2f dimension, Color4 color)
+    {
+        Dimension = dimension;
+        Color = color;
+    }
 }
