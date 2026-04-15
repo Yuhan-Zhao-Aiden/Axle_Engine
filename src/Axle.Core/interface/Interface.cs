@@ -9,7 +9,4 @@ public interface IRenderStage
     void Draw(float alpha);
 }
 
-public interface IComponent
-{
-
-}
+public interface IComponent {}
