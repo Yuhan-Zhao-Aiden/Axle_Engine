@@ -31,3 +31,28 @@ public struct RenderRect : IComponent
         Color = color;
     }
 }
+
+public struct SimPosition : IComponent
+{
+    public Fixed32 X;
+    public Fixed32 Y;
+
+    public SimPosition(Fixed32 x, Fixed32 y)
+    {
+        X = x;
+        Y = y;
+    }
+}
+
+
+public struct MoveInput : IComponent
+{
+    public int X;
+    public int Y;
+
+    public MoveInput(int x, int y)
+    {
+        X = x;
+        Y = y;
+    }
+}

@@ -56,6 +56,14 @@ public readonly struct Fixed32 : IEquatable<Fixed32>, IComparable<Fixed32>
     public static Fixed32 operator -(Fixed32 a)
         => new Fixed32(-a._raw);
 
+    // ---- Comparison ----
+    public static bool operator ==(Fixed32 a, Fixed32 b) => a._raw == b._raw;
+    public static bool operator !=(Fixed32 a, Fixed32 b) => a._raw != b._raw;
+    public static bool operator  <(Fixed32 a, Fixed32 b) => a._raw  < b._raw;
+    public static bool operator <=(Fixed32 a, Fixed32 b) => a._raw <= b._raw;
+    public static bool operator  >(Fixed32 a, Fixed32 b) => a._raw  > b._raw;
+    public static bool operator >=(Fixed32 a, Fixed32 b) => a._raw >= b._raw;
+
     public override string ToString() 
         => ToDouble().ToString();
 }
