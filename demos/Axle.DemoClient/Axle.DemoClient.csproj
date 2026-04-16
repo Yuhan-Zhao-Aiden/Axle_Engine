@@ -13,6 +13,14 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RootNamespace>Axle.Client</RootNamespace>
+    <AssemblyName>Axle.Client</AssemblyName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="assets\test.map">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 
 </Project>

@@ -1,18 +1,22 @@
-﻿// See https://aka.ms/new-console-template for more information
-namespace Axle.DemoClient;
+﻿namespace Axle.Client;
 using Axle.Core;
 using Axle.Core.AxleMath;
 using Axle.Core.Utility;
 using Axle.Ecs;
 using Axle.Graphics;
 using Axle.Sim;
-using Axle.System;
+using Axle.Sim.Map;
+using Axle.Client.System;
 
 public class Program
 {
     public static void Main(string[] args)
     {
-        CommandBuffer _cb = new();
+        // Resolve relative to the output directory so the path is correct
+        // regardless of which directory dotnet run is invoked from.
+        string mapPath = Path.Combine(AppContext.BaseDirectory, "assets", "test.map");
+        MapData map = MapLoader.Load(mapPath);
+
         var window = new WindowHost();
         var world = new World();
 
@@ -24,19 +28,22 @@ public class Program
         world.Register<MoveInput>();
         world.Register<LocalPlayer>();
 
-        // Build static scene
-        EntitySystem ent = new(_cb.ForSystem(0).CreateWriter());
-        ent.CreateScene();
-        _cb.Playback(world);
+        // Spawn player at first A spawn, or origin if none present
+        Fixed32 spawnX = Fixed32.Zero;
+        Fixed32 spawnY = Fixed32.Zero;
+        if (map.PlayerSpawns.Count > 0)
+        {
+            spawnX = Fixed32.FromInt(map.PlayerSpawns[0].X * 32);
+            spawnY = Fixed32.FromInt(map.PlayerSpawns[0].Y * 32);
+        }
 
-        // Spawn player entity (yellow square, starts at origin)
         var player = world.CreateEntity();
-        world.Add(player, new SimPosition(Fixed32.Zero, Fixed32.Zero));
+        world.Add(player, new SimPosition(spawnX, spawnY));
         world.Add(player, new Velocity(Fixed32.Zero, Fixed32.Zero));
         world.Add(player, new MoveInput(0, 0));
         world.Add<LocalPlayer>(player);
-        world.Add(player, new Transform(new Vector2f(0f, 0f)));
-        world.Add(player, new RenderRect(new Vector2f(32f, 32f), new Color4(255, 255, 0)));
+        world.Add(player, new Transform(new Vector2f(spawnX.ToFloat(), spawnY.ToFloat())));
+        world.Add(player, new RenderRect(new Vector2f(32f, 32f), new Color4(1f, 1f, 0f)));
 
         // Systems order declares the pipeline
         var input = new LocalInputSystem();
@@ -47,7 +54,7 @@ public class Program
         EngineLoop? loop = null;
         window.OnReady = () =>
         {
-            renderRunner.Initialize(window.Renderer);
+            renderRunner.Initialize(window.Renderer, map);
             loop = new EngineLoop(simRunner, renderRunner);
         };
 

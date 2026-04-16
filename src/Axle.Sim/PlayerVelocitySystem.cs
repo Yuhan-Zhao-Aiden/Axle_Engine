@@ -9,7 +9,7 @@ namespace Axle.Sim;
 /// </summary>
 public sealed class PlayerVelocitySystem : ISystem
 {
-    public static readonly Fixed32 MoveSpeed = Fixed32.FromInt(50);
+    public static readonly Fixed32 MoveSpeed = Fixed32.FromInt(90);
 
     public void Run(World world)
     {

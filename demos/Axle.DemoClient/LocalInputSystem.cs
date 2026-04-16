@@ -2,7 +2,7 @@ using Axle.Ecs;
 using Axle.Sim;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 
-namespace Axle.System;
+namespace Axle.Client.System;
 
 /// <summary>
 /// Reads keyboard state and writes MoveInput for the local player entity.
