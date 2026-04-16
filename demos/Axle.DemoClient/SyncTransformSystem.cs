@@ -2,7 +2,7 @@ using Axle.Core.AxleMath;
 using Axle.Ecs;
 using Axle.Sim;
 
-namespace Axle.System;
+namespace Axle.Client.System;
 
 public sealed class SyncTransformSystem : ISystem
 {

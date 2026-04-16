@@ -1,4 +1,4 @@
-namespace Axle.System;
+namespace Axle.Client.System;
 
 using Axle.Ecs;
 using Axle.Graphics;

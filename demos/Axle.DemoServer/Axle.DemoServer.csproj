@@ -12,6 +12,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RootNamespace>Axle.Server</RootNamespace>
+    <AssemblyName>Axle.Server</AssemblyName>
   </PropertyGroup>
 
 </Project>
