@@ -27,6 +27,7 @@ public class Program
         world.Register<Velocity>();
         world.Register<MoveInput>();
         world.Register<LocalPlayer>();
+        world.Register<PlayerCollider>();
 
         // Spawn player at first A spawn, or origin if none present
         Fixed32 spawnX = Fixed32.Zero;
@@ -44,12 +45,14 @@ public class Program
         world.Add<LocalPlayer>(player);
         world.Add(player, new Transform(new Vector2f(spawnX.ToFloat(), spawnY.ToFloat())));
         world.Add(player, new RenderRect(new Vector2f(32f, 32f), new Color4(1f, 1f, 0f)));
+        world.Add(player, new PlayerCollider(Fixed32.FromInt(16), Fixed32.FromInt(16)));
 
         // Systems order declares the pipeline
         var input = new LocalInputSystem();
         var sync = new SyncTransformSystem();
         var renderRunner = new RenderRunner(world, sync, () => new Camera(window.ClientSize.X, window.ClientSize.Y));
-        var simRunner = new SimRunner(world, input, new PlayerVelocitySystem(), new MovementSystem(SimTime.Dt));
+        var tileMap = new TileCollisionMap(map);
+        var simRunner = new SimRunner(world, input, new PlayerVelocitySystem(), new TileCollisionMovementSystem(SimTime.Dt, tileMap));
 
         EngineLoop? loop = null;
         window.OnReady = () =>
