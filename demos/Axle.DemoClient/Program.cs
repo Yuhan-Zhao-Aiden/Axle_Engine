@@ -1,4 +1,6 @@
-﻿namespace Axle.Client;
+﻿using System.Text.Json;
+
+namespace Axle.Client;
 using Axle.Core;
 using Axle.Core.AxleMath;
 using Axle.Core.Utility;
@@ -14,8 +16,14 @@ public class Program
     {
         // Resolve relative to the output directory so the path is correct
         // regardless of which directory dotnet run is invoked from.
-        string mapPath = Path.Combine(AppContext.BaseDirectory, "assets", "test.map");
+        string mapPath      = Path.Combine(AppContext.BaseDirectory, "assets", "test.map");
+        string settingsPath = Path.Combine(AppContext.BaseDirectory, "assets", "settings.json");
         MapData map = MapLoader.Load(mapPath);
+
+        using var settingsDoc    = JsonDocument.Parse(File.ReadAllText(settingsPath));
+        var cameraSettings       = settingsDoc.RootElement.GetProperty("camera")
+                                       .Deserialize<CameraSettings>() ?? new CameraSettings();
+        var camController        = new CameraController(cameraSettings, map);
 
         var window = new WindowHost();
         var world = new World();
@@ -50,7 +58,13 @@ public class Program
         // Systems order declares the pipeline
         var input = new LocalInputSystem();
         var sync = new SyncTransformSystem();
-        var renderRunner = new RenderRunner(world, sync, () => new Camera(window.ClientSize.X, window.ClientSize.Y));
+        var renderRunner = new RenderRunner(world, sync, () =>
+        {
+            int vpW = window.ClientSize.X;
+            int vpH = window.ClientSize.Y;
+            var (cx, cy) = camController.Update(world, vpW, vpH);
+            return new Camera(vpW, vpH, cx, cy);
+        });
         var tileMap = new TileCollisionMap(map);
         var simRunner = new SimRunner(world, input, new PlayerVelocitySystem(), new TileCollisionMovementSystem(SimTime.Dt, tileMap));
 

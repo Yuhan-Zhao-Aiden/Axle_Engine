@@ -1,0 +1,8 @@
+{
+  "camera": {
+    "mode": "follow",
+    "smoothing": false,
+    "fixedX": 0,
+    "fixedY": 0
+  }
+}
