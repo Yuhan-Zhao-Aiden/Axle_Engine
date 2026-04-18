@@ -10,11 +10,14 @@ public sealed class QuadRenderer : IDisposable
     private readonly int _vbo;
     private readonly int _shader;
     private readonly int _uResolutionLoc;
+    private readonly int _uCameraOffsetLoc;
 
     private readonly float[] _batch;
     private int _batchOffset;   
     private int _viewportW;
     private int _viewportH;
+    private float _cameraOffsetX;
+    private float _cameraOffsetY;
 
     private const int FloatsPerVertex = 6;
     // Two triangles (TL-TR-BR, TL-BR-BL) → 6 verts per quad
@@ -28,9 +31,10 @@ public sealed class QuadRenderer : IDisposable
         layout(location = 1) in vec4 aColor;
         out vec4 vColor;
         uniform vec2 uResolution;
+        uniform vec2 uCameraOffset;
         void main()
         {
-            vec2 ndc = (aPosition / uResolution) * 2.0;
+            vec2 ndc = ((aPosition - uCameraOffset) / uResolution) * 2.0;
             ndc.y = -ndc.y;
             gl_Position = vec4(ndc, 0.0, 1.0);
             vColor = aColor;
@@ -62,7 +66,8 @@ public sealed class QuadRenderer : IDisposable
         GL.DeleteShader(vert);
         GL.DeleteShader(frag);
 
-        _uResolutionLoc = GL.GetUniformLocation(_shader, "uResolution");
+        _uResolutionLoc    = GL.GetUniformLocation(_shader, "uResolution");
+        _uCameraOffsetLoc  = GL.GetUniformLocation(_shader, "uCameraOffset");
 
         _vao = GL.GenVertexArray();
         _vbo = GL.GenBuffer();
@@ -86,9 +91,14 @@ public sealed class QuadRenderer : IDisposable
 
     public void Begin(Camera camera)
     {
-        _batchOffset = 0;
-        _viewportW = camera.ViewportWidth;
-        _viewportH = camera.ViewportHeight;
+        _batchOffset    = 0;
+        _viewportW      = camera.ViewportWidth;
+        _viewportH      = camera.ViewportHeight;
+        // Subtract the camera world centre so that world position (WorldX, WorldY)
+        // maps to NDC (0,0) = screen centre. When WorldX/Y = 0 this is a no-op,
+        // preserving the original convention where world origin is screen centre.
+        _cameraOffsetX  = camera.WorldX;
+        _cameraOffsetY  = camera.WorldY;
     }
 
     /// <summary>
@@ -122,7 +132,8 @@ public sealed class QuadRenderer : IDisposable
         int vertexCount = _batchOffset / FloatsPerVertex;
 
         GL.UseProgram(_shader);
-        GL.Uniform2(_uResolutionLoc, (float)_viewportW, (float)_viewportH);
+        GL.Uniform2(_uResolutionLoc,   (float)_viewportW, (float)_viewportH);
+        GL.Uniform2(_uCameraOffsetLoc, _cameraOffsetX,   _cameraOffsetY);
 
         GL.BindVertexArray(_vao);
         GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
