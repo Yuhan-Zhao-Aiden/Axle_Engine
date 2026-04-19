@@ -18,12 +18,13 @@ public class Program
         // regardless of which directory dotnet run is invoked from.
         string mapPath      = Path.Combine(AppContext.BaseDirectory, "assets", "test.map");
         string settingsPath = Path.Combine(AppContext.BaseDirectory, "assets", "settings.json");
-        MapData map = MapLoader.Load(mapPath);
 
-        using var settingsDoc    = JsonDocument.Parse(File.ReadAllText(settingsPath));
-        var cameraSettings       = settingsDoc.RootElement.GetProperty("camera")
-                                       .Deserialize<CameraSettings>() ?? new CameraSettings();
-        var camController        = new CameraController(cameraSettings, map);
+        var jsonOpts = new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip };
+        var settings = JsonSerializer.Deserialize<GameSettings>(File.ReadAllText(settingsPath), jsonOpts) ?? new GameSettings();
+
+        MapData map = MapLoader.Load(mapPath, settings.Mode);
+
+        var camController = new CameraController(settings.Camera, map);
 
         var window = new WindowHost();
         var world = new World();
@@ -36,6 +37,8 @@ public class Program
         world.Register<MoveInput>();
         world.Register<LocalPlayer>();
         world.Register<PlayerCollider>();
+        world.Register<CollisionLayer>();
+        world.Register<Collectible>();
 
         // Spawn player at first A spawn, or origin if none present
         Fixed32 spawnX = Fixed32.Zero;
@@ -54,6 +57,25 @@ public class Program
         world.Add(player, new Transform(new Vector2f(spawnX.ToFloat(), spawnY.ToFloat())));
         world.Add(player, new RenderRect(new Vector2f(32f, 32f), new Color4(1f, 1f, 0f)));
         world.Add(player, new PlayerCollider(Fixed32.FromInt(16), Fixed32.FromInt(16)));
+        world.Add(player, new CollisionLayer(CollisionLayers.Player, Fixed32.FromInt(16), Fixed32.FromInt(16)));
+
+        // Spawn collectibles at each 'C' position from the map
+        var gold = new Color4(1f, 0.85f, 0f);
+        foreach (var spawn in map.CoinSpawns)
+        {
+            Fixed32 cx = Fixed32.FromInt(spawn.X * 32);
+            Fixed32 cy = Fixed32.FromInt(spawn.Y * 32);
+            var coin = world.CreateEntity();
+            world.Add(coin, new SimPosition(cx, cy));
+            world.Add(coin, new CollisionLayer(CollisionLayers.Collectible, Fixed32.FromInt(16), Fixed32.FromInt(16)));
+            world.Add<Collectible>(coin);
+            world.Add(coin, new Transform(new Vector2f(cx.ToFloat(), cy.ToFloat())));
+            world.Add(coin, new RenderRect(new Vector2f(32f, 32f), gold));
+        }
+
+        // Build generalized overlap system
+        var overlapSys = new EntityOverlapSystem();
+        overlapSys.Register(CollisionLayers.Player, CollisionLayers.Collectible, new CollectibleHandler(world));
 
         // Systems order declares the pipeline
         var input = new LocalInputSystem();
@@ -62,11 +84,18 @@ public class Program
         {
             int vpW = window.ClientSize.X;
             int vpH = window.ClientSize.Y;
-            var (cx, cy) = camController.Update(world, vpW, vpH);
-            return new Camera(vpW, vpH, cx, cy);
+            var (cx2, cy2) = camController.Update(world, vpW, vpH);
+            return new Camera(vpW, vpH, cx2, cy2);
         });
         var tileMap = new TileCollisionMap(map);
-        var simRunner = new SimRunner(world, input, new PlayerVelocitySystem(), new TileCollisionMovementSystem(SimTime.Dt, tileMap));
+
+        // Build system pipeline — GravitySystem only active in Platformer mode
+        List<ISystem> systems = [input, new PlayerVelocitySystem()];
+        if (settings.Mode == GameMode.Platformer)
+            systems.Add(new GravitySystem());
+        systems.Add(new TileCollisionMovementSystem(SimTime.Dt, tileMap));
+        systems.Add(overlapSys);
+        var simRunner = new SimRunner(world, [.. systems]);
 
         EngineLoop? loop = null;
         window.OnReady = () =>

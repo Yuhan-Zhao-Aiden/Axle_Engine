@@ -1,5 +1,7 @@
 namespace Axle.Sim.Map;
 
+using Axle.Sim;
+
 /// <summary>
 /// Loads and parses <c>.map</c> text files into <see cref="MapData"/>.
 ///
@@ -24,17 +26,17 @@ public static class MapLoader
     /// Throws <see cref="IOException"/> if the file cannot be read.
     /// Throws <see cref="MapParseException"/> if the content is invalid.
     /// </summary>
-    public static MapData Load(string filePath)
+    public static MapData Load(string filePath, GameMode mode = GameMode.TopDown)
     {
         string[] lines = File.ReadAllLines(filePath);
-        return Parse(lines);
+        return Parse(lines, mode);
     }
 
     /// <summary>
     /// Parse an array of raw lines (e.g. from a file or a test fixture).
     /// Throws <see cref="MapParseException"/> if the content is invalid.
     /// </summary>
-    public static MapData Parse(string[] lines)
+    public static MapData Parse(string[] lines, GameMode mode = GameMode.TopDown)
     {
         // --- Preprocessing: strip blanks and comments ---
         List<string> rows = new(lines.Length);
@@ -82,21 +84,18 @@ public static class MapLoader
                         break;
 
                     case 'A':
-                        tiles[x, y] = TileType.Floor;
+                        if (mode == GameMode.TopDown) { tiles[x, y] = TileType.Floor; authoredCount++; }
                         playerSpawns.Add(new MapPoint(x, y));
-                        authoredCount++;
                         break;
 
                     case 'C':
-                        tiles[x, y] = TileType.Floor;
+                        if (mode == GameMode.TopDown) { tiles[x, y] = TileType.Floor; authoredCount++; }
                         coinSpawns.Add(new MapPoint(x, y));
-                        authoredCount++;
                         break;
 
                     case 'E':
-                        tiles[x, y] = TileType.Floor;
+                        if (mode == GameMode.TopDown) { tiles[x, y] = TileType.Floor; authoredCount++; }
                         enemySpawns.Add(new MapPoint(x, y));
-                        authoredCount++;
                         break;
 
                     case ' ':

@@ -1,7 +1,19 @@
 {
+  // Simulation mode. Allowed values: "topdown" | "platformer"
+  //   topdown - gravity off; spawn chars (A/C/E) place a Floor tile underneath
+  //   platformer - gravity on; spawn chars are markers only, tile stays void
+  "mode": "topdown",
+
   "camera": {
+    // Camera tracking mode. Allowed values: "follow" | "fixed"
+    //   follow - camera tracks the local player entity
+    //   fixed - camera stays at (fixedX, fixedY) in world space
     "mode": "follow",
+
+    // Smooth camera movement (10% lerp per frame). Allowed values: true | false
     "smoothing": false,
+
+    // World-space position used when mode is "fixed"
     "fixedX": 0,
     "fixedY": 0
   }
