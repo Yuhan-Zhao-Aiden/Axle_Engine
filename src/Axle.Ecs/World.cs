@@ -71,6 +71,13 @@ public class World
         _alive[e.Index] && 
         e.Version == _versions[e.Index];
 
+    /// <summary>
+    /// Resolves a full <see cref="EntityId"/> from the raw entity index returned by
+    /// query iterators. Allows overlap systems to pass the correct (index, version)
+    /// pair to <see cref="DestoryEntity"/>.
+    /// </summary>
+    public EntityId GetEntityId(int index) => new EntityId(index, _versions[index]);
+
 
     // ---- Store Registration / Access -----
     // Create new component store, return existing store

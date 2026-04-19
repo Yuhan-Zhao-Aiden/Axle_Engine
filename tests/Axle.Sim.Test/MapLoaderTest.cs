@@ -1,5 +1,6 @@
 namespace Axle.Sim.Test;
 
+using Axle.Sim;
 using Axle.Sim.Map;
 
 public class MapLoaderTest
@@ -180,5 +181,36 @@ public class MapLoaderTest
     {
         string[] lines = ["", "  ", "; comment", "// another"];
         Assert.Throws<MapParseException>(() => MapLoader.Parse(lines));
+    }
+
+    // -----------------------------------------------------------------------
+    // Platformer mode — spawn chars leave tiles void
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Platformer_SpawnChars_TileIsVoid()
+    {
+        // In Platformer mode, A / C / E must NOT place a Floor tile.
+        string[] lines = ["#ACE#"];
+        MapData map = MapLoader.Parse(lines, GameMode.Platformer);
+
+        Assert.False(map.TryGetTile(1, 0, out _)); // 'A' → void
+        Assert.False(map.TryGetTile(2, 0, out _)); // 'C' → void
+        Assert.False(map.TryGetTile(3, 0, out _)); // 'E' → void
+
+        // Walls still present
+        Assert.True(map.TryGetTile(0, 0, out TileType wall)); Assert.Equal(TileType.Wall, wall);
+    }
+
+    [Fact]
+    public void Platformer_SpawnChars_StillRecorded()
+    {
+        // Spawn lists must still be populated even though tiles are void.
+        string[] lines = ["#ACE#"];
+        MapData map = MapLoader.Parse(lines, GameMode.Platformer);
+
+        Assert.Single(map.PlayerSpawns);  Assert.Equal(new MapPoint(1, 0), map.PlayerSpawns[0]);
+        Assert.Single(map.CoinSpawns);    Assert.Equal(new MapPoint(2, 0), map.CoinSpawns[0]);
+        Assert.Single(map.EnemySpawns);   Assert.Equal(new MapPoint(3, 0), map.EnemySpawns[0]);
     }
 }
