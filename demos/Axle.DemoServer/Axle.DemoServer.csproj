@@ -5,6 +5,7 @@
     <ProjectReference Include="..\..\src\Axle.Ecs\Axle.Ecs.csproj" />
     <ProjectReference Include="..\..\src\Axle.Sim\Axle.Sim.csproj" />
     <ProjectReference Include="..\..\src\Axle.Platform\Axle.Platform.csproj" />
+    <ProjectReference Include="..\..\src\Axle.Net\Axle.Net.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
