@@ -17,4 +17,11 @@
     <AssemblyName>Axle.Server</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Content Include="..\Axle.DemoClient\assets\test.map">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>assets\test.map</Link>
+    </Content>
+  </ItemGroup>
+
 </Project>

@@ -15,11 +15,7 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        if (args.Contains("--net"))
-        {
-            RunNetClient();
-            return;
-        }
+        bool useNet = args.Contains("--net");
 
         // Resolve relative to the output directory so the path is correct
         // regardless of which directory dotnet run is invoked from.
@@ -104,49 +100,39 @@ public class Program
         systems.Add(overlapSys);
         var simRunner = new SimRunner(world, [.. systems]);
 
+        // Optional network client — created when --net flag is provided.
+        NetClient? netClient = null;
+        ClientInputSender? sender = null;
+        if (useNet)
+        {
+            netClient = new NetClient(new UdpTransport());
+            netClient.Connect(new NetEndpoint("127.0.0.1", 7777));
+            sender = new ClientInputSender(netClient);
+            Console.WriteLine("[Client] Connecting to 127.0.0.1:7777...");
+        }
+
         EngineLoop? loop = null;
+        ulong netTick = 0;
+
         window.OnReady = () =>
         {
             renderRunner.Initialize(window.Renderer, map);
             loop = new EngineLoop(simRunner, renderRunner);
         };
 
-        window.OnFrame = () => loop?.Frame();
-        window.OnInput = ks => input.Update(ks);
+        window.OnFrame = () =>
+        {
+            netClient?.Tick(netTick++);
+            loop?.Frame();
+        };
+
+        window.OnInput = ks =>
+        {
+            input.Update(ks);
+            sender?.Update(ks, Environment.TickCount64);
+        };
 
         window.Run();
-    }
-
-    private static void RunNetClient()
-    {
-        using var client = new NetClient(new UdpTransport());
-        client.Connect(new NetEndpoint("127.0.0.1", 7777));
-        Console.WriteLine("[Client] Connecting to 127.0.0.1:7777...");
-
-        ulong tick = 0;
-        ConnectionState lastState = ConnectionState.Disconnected;
-        long lastRtt = -1;
-
-        while (client.State is ConnectionState.Connecting or ConnectionState.Connected)
-        {
-            client.Tick(tick++);
-
-            if (client.State != lastState)
-            {
-                lastState = client.State;
-                Console.WriteLine($"[Client] State: {client.State}");
-            }
-
-            if (client.LatestRttMs != lastRtt && client.LatestRttMs >= 0)
-            {
-                lastRtt = client.LatestRttMs;
-                Console.WriteLine($"[Client] RTT: {client.LatestRttMs} ms");
-            }
-
-            Thread.Sleep(33);
-        }
-
-        if (client.State == ConnectionState.TimedOut)
-            Console.WriteLine("[Client] Connection timed out.");
+        netClient?.Dispose();
     }
 }

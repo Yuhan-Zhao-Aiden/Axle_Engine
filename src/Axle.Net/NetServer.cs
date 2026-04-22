@@ -12,10 +12,12 @@ public sealed class NetServer : IDisposable
 {
     private readonly ITransport _transport;
     private readonly List<NetEndpoint> _connectedPeers = [];
+    private readonly Dictionary<NetEndpoint, BufferedInput> _inputBuffers = new();
 
     private bool _disposed;
 
     public IReadOnlyList<NetEndpoint> ConnectedPeers => _connectedPeers;
+    public IReadOnlyDictionary<NetEndpoint, BufferedInput> InputBuffers => _inputBuffers;
 
     public NetServer(ITransport transport)
     {
@@ -45,6 +47,10 @@ public sealed class NetServer : IDisposable
                 case PacketType.Ping:
                     OnPing(packet);
                     break;
+
+                case PacketType.InputState:
+                    OnInputState(packet);
+                    break;
             }
         }
     }
@@ -65,6 +71,26 @@ public sealed class NetServer : IDisposable
             return;
 
         Packet.WritePong(_transport, packet.Source, seqId, sentMs);
+    }
+
+    private void OnInputState(TransportPacket packet)
+    {
+        if (!_connectedPeers.Contains(packet.Source)) return;
+
+        if (!Packet.TryReadInputState(packet.Payload, out InputState state)) return;
+
+        if (_inputBuffers.TryGetValue(packet.Source, out BufferedInput buf))
+        {
+            // Reject stale or duplicate packets.
+            if (buf.HasInput && state.Seq <= buf.LatestSeq) return;
+        }
+
+        _inputBuffers[packet.Source] = new BufferedInput
+        {
+            LatestSeq   = state.Seq,
+            LatestState = state,
+            HasInput    = true,
+        };
     }
 
     public void Dispose()
