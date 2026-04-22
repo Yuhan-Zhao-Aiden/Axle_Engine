@@ -57,4 +57,13 @@ public sealed class NetClient : IDisposable
         _disposed = true;
         _transport.Stop();
     }
+
+    /// <summary>
+    /// Send an input state packet to the server.
+    /// </summary>
+    public void SendInput(InputState state)
+    {
+        if (State != ConnectionState.Connected) return;
+        Packet.WriteInputState(_transport, _server, state);
+    }
 }

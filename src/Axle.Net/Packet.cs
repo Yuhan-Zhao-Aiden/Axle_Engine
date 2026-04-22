@@ -6,10 +6,12 @@ namespace Axle.Net;
 //   All packets: [PacketType: 1 byte] [payload...]
 //   ConnectRequest/Accept/Reject: no payload (1 byte total)
 //   Ping / Pong: [PacketType: 1][seqId: int32 LE 4][sentMs: int64 LE 8] = 13 bytes total
+//   Button: [PacketType: 1][seq: ushort LE 2][buttons: ushort LE 2] = 5 bytes total
 
 internal static class Packet
 {
     private const int PingPongLength = 13;
+    private const int InputStateLength = 5;
 
     public static void WriteConnectRequest(ITransport transport, NetEndpoint endpoint)
     {
@@ -66,6 +68,24 @@ internal static class Packet
         if (payload is not { Length: >= PingPongLength }) return false;
         seqId = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(1));
         sentMs = BinaryPrimitives.ReadInt64LittleEndian(payload.AsSpan(5));
+        return true;
+    }
+
+    public static void WriteInputState(ITransport transport, NetEndpoint endpoint, InputState state)
+    {
+        Span<byte> buf = stackalloc byte[InputStateLength];
+        buf[0] = (byte)PacketType.InputState;
+        BinaryPrimitives.WriteUInt16LittleEndian(buf[1..], state.Seq);
+        BinaryPrimitives.WriteUInt16LittleEndian(buf[3..], state.Buttons);
+        transport.Send(endpoint, buf);
+    }
+
+    public static bool TryReadInputState(byte[] payload, out InputState state)
+    {
+        state = default;
+        if (payload is not { Length: >= InputStateLength }) return false;
+        state.Seq     = BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(1));
+        state.Buttons = BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(3));
         return true;
     }
 }

@@ -7,4 +7,5 @@ public enum PacketType : byte
     ConnectReject = 3,
     Ping = 4,
     Pong = 5,
+    InputState = 6,
 }
