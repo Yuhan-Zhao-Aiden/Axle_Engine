@@ -44,7 +44,8 @@ public class Program
         var simRunner = new SimRunner(world,
             networkInput,
             new PlayerVelocitySystem(),
-            new TileCollisionMovementSystem(SimTime.Dt, tileMap));
+            new TileCollisionMovementSystem(SimTime.Dt, tileMap),
+            new SnapshotBroadcastSystem(server));
 
         const double fixedDt = 1.0 / SimTime.TickRate;
         const int logIntervalTicks = SimTime.TickRate; // log once per second

@@ -11,6 +11,7 @@ public sealed class NetClient : IDisposable
     private readonly ITransport _transport;
     private readonly HandshakeManager _handshake = new();
     private readonly PingTracker _ping = new();
+    private readonly Queue<SnapshotData> _snapshots = new();
 
     private NetEndpoint _server;
     private bool _disposed;
@@ -45,6 +46,12 @@ public sealed class NetClient : IDisposable
 
             if (type == PacketType.Pong && State == ConnectionState.Connected)
                 _ping.OnPong(packet.Payload);
+
+            if (type == PacketType.Snapshot && State == ConnectionState.Connected)
+            {
+                if (Packet.TryReadSnapshot(packet.Payload, out var snap))
+                    _snapshots.Enqueue(snap with { ReceivedMs = Environment.TickCount64 });
+            }
         }
 
         if (State == ConnectionState.Connected)
@@ -65,5 +72,20 @@ public sealed class NetClient : IDisposable
     {
         if (State != ConnectionState.Connected) return;
         Packet.WriteInputState(_transport, _server, state);
+    }
+
+    /// <summary>
+    /// Dequeues the next snapshot received from the server.
+    /// Returns false when the queue is empty.
+    /// </summary>
+    public bool TryDequeueSnapshot(out SnapshotData data)
+    {
+        if (_snapshots.Count > 0)
+        {
+            data = _snapshots.Dequeue();
+            return true;
+        }
+        data = default;
+        return false;
     }
 }

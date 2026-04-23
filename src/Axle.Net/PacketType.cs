@@ -8,4 +8,5 @@ public enum PacketType : byte
     Ping = 4,
     Pong = 5,
     InputState = 6,
+    Snapshot = 7,
 }

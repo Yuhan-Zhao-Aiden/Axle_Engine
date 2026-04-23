@@ -92,24 +92,33 @@ public class Program
         });
         var tileMap = new TileCollisionMap(map);
 
-        // Build system pipeline — GravitySystem only active in Platformer mode
-        List<ISystem> systems = [input, new PlayerVelocitySystem()];
-        if (settings.Mode == GameMode.Platformer)
-            systems.Add(new GravitySystem());
-        systems.Add(new TileCollisionMovementSystem(SimTime.Dt, tileMap));
-        systems.Add(overlapSys);
-        var simRunner = new SimRunner(world, [.. systems]);
+        // Pre-instantiate the two systems that ReconciliationApplicator needs to replay
+        // unacknowledged inputs — same instances run inside the SimRunner.
+        var velocitySystem = new PlayerVelocitySystem();
+        var movementSystem = new TileCollisionMovementSystem(SimTime.Dt, tileMap);
+        var history        = new InputHistory();
+
+        // Build system pipeline — ClientNetInputSystem injected after LocalInputSystem in --net mode.
+        List<ISystem> systems = [input];
 
         // Optional network client — created when --net flag is provided.
         NetClient? netClient = null;
-        ClientInputSender? sender = null;
+        ReconciliationApplicator? reconciliator = null;
         if (useNet)
         {
             netClient = new NetClient(new UdpTransport());
             netClient.Connect(new NetEndpoint("127.0.0.1", 7777));
-            sender = new ClientInputSender(netClient);
+            systems.Add(new ClientNetInputSystem(netClient, history));
+            reconciliator = new ReconciliationApplicator(history, world, player, velocitySystem, movementSystem);
             Console.WriteLine("[Client] Connecting to 127.0.0.1:7777...");
         }
+
+        systems.Add(velocitySystem);
+        if (settings.Mode == GameMode.Platformer)
+            systems.Add(new GravitySystem());
+        systems.Add(movementSystem);
+        systems.Add(overlapSys);
+        var simRunner = new SimRunner(world, [.. systems]);
 
         EngineLoop? loop = null;
         ulong netTick = 0;
@@ -123,14 +132,12 @@ public class Program
         window.OnFrame = () =>
         {
             netClient?.Tick(netTick++);
+            while (netClient is not null && netClient.TryDequeueSnapshot(out var snap))
+                reconciliator?.Apply(snap);
             loop?.Frame();
         };
 
-        window.OnInput = ks =>
-        {
-            input.Update(ks);
-            sender?.Update(ks, Environment.TickCount64);
-        };
+        window.OnInput = ks => input.Update(ks);
 
         window.Run();
         netClient?.Dispose();
