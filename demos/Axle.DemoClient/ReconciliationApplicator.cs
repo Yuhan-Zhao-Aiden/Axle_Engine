@@ -20,8 +20,13 @@ internal sealed class ReconciliationApplicator
     private readonly TileCollisionMovementSystem _movementSystem;
     private readonly EntityId? _ghost;
 
-    public Fixed32 LastErrorX { get; private set; }
-    public Fixed32 LastErrorY { get; private set; }
+    // Server-assigned entity that corresponds to our local player. -1 = not yet known.
+    private int _serverEntityIndex   = -1;
+    private int _serverEntityVersion = -1;
+
+    public Fixed32 LastErrorX  { get; private set; }
+    public Fixed32 LastErrorY  { get; private set; }
+    public ushort  LastAckedSeq { get; private set; }
 
     public ReconciliationApplicator(
         InputHistory history,
@@ -39,13 +44,22 @@ internal sealed class ReconciliationApplicator
         _ghost = ghost;
     }
 
+    public void SetServerEntity(int serverEntityIndex, int serverEntityVersion)
+    {
+        _serverEntityIndex   = serverEntityIndex;
+        _serverEntityVersion = serverEntityVersion;
+    }
+
     public void Apply(SnapshotData snap)
     {
-        // 1. Find the player entry and warp position to server authority.
+        // Guard: skip reconciliation until the server entity assignment is known.
+        if (_serverEntityIndex < 0) return;
+
+        // 1. Find the entry matching our server-assigned entity and warp position.
         foreach (var entry in snap.Entries)
         {
-            if (entry.EntityIndex   != _player.Index ||
-                entry.EntityVersion != _player.Version)
+            if (entry.EntityIndex   != _serverEntityIndex ||
+                entry.EntityVersion != _serverEntityVersion)
                 continue;
 
             ref var pos = ref _world.Get<SimPosition>(_player);
@@ -78,6 +92,7 @@ internal sealed class ReconciliationApplicator
         }
 
         // 2. Drop inputs the server has already consumed.
+        LastAckedSeq = snap.AckSeq;
         _history.DropBefore(snap.AckSeq);
 
         // 3. Re-simulate each unacknowledged input on top of the corrected position.

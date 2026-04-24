@@ -48,7 +48,21 @@ public sealed class InputHistory
         }
     }
 
-    // True if 'a' is strictly after 'b' in ushort sequence space (half-window wrap).
+    /// <summary>Returns the number of entries with seq > ackSeq (unacknowledged inputs).</summary>
+    public int PendingCount(ushort ackSeq)
+    {
+        int count = 0;
+        int tail = (_head - _count + Capacity) % Capacity;
+        for (int i = 0; i < _count; i++)
+        {
+            int idx = (tail + i) % Capacity;
+            if (IsAfter(_buf[idx].Seq, ackSeq))
+                count++;
+        }
+        return count;
+    }
+
+    // True if 'a' is strictly after 'b' in ushort sequence space.
     private static bool IsAfter(ushort a, ushort b)
         => unchecked((ushort)(a - b)) is > 0 and < 32768;
 }

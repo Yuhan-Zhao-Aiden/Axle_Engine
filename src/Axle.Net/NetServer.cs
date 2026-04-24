@@ -13,11 +13,15 @@ public sealed class NetServer : IDisposable
     private readonly ITransport _transport;
     private readonly List<NetEndpoint> _connectedPeers = [];
     private readonly Dictionary<NetEndpoint, BufferedInput> _inputBuffers = new();
+    private readonly Dictionary<NetEndpoint, (int Index, int Version)> _clientEntities = new();
 
     private bool _disposed;
 
     public IReadOnlyList<NetEndpoint> ConnectedPeers => _connectedPeers;
     public IReadOnlyDictionary<NetEndpoint, BufferedInput> InputBuffers => _inputBuffers;
+    public IReadOnlyDictionary<NetEndpoint, (int Index, int Version)> ClientEntities => _clientEntities;
+
+    public Func<NetEndpoint, (int Index, int Version)>? OnClientConnected { get; set; }
 
     public NetServer(ITransport transport)
     {
@@ -61,8 +65,14 @@ public sealed class NetServer : IDisposable
             return;
 
         _connectedPeers.Add(packet.Source);
-        Packet.WriteConnectAccept(_transport, packet.Source);
-        Console.WriteLine($"[Server] Client connected: {packet.Source.Host}:{packet.Source.Port}");
+
+        (int Index, int Version) assigned = OnClientConnected != null
+            ? OnClientConnected(packet.Source)
+            : (0, 0);
+        _clientEntities[packet.Source] = assigned;
+
+        Packet.WriteConnectAccept(_transport, packet.Source, assigned.Index, assigned.Version);
+        Console.WriteLine($"[Server] Client connected: {packet.Source.Host}:{packet.Source.Port} → entity {assigned.Index}");
     }
 
     private void OnPing(TransportPacket packet)
@@ -112,5 +122,13 @@ public sealed class NetServer : IDisposable
         Span<byte> buf = stackalloc byte[Packet.SnapshotMaxBytes(entries.Length)];
         if (Packet.TryWriteSnapshot(buf, tickId, ackSeq, entries, out int written))
             Broadcast(buf[..written]);
+    }
+
+    // Serialises and sends a snapshot to a single peer with its own ackSeq.
+    public void SendSnapshotTo(NetEndpoint peer, ulong tickId, ushort ackSeq, ReadOnlySpan<SnapshotEntry> entries)
+    {
+        Span<byte> buf = stackalloc byte[Packet.SnapshotMaxBytes(entries.Length)];
+        if (Packet.TryWriteSnapshot(buf, tickId, ackSeq, entries, out int written))
+            _transport.Send(peer, buf[..written]);
     }
 }

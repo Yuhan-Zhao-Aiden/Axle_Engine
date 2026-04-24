@@ -24,13 +24,6 @@ public sealed class SnapshotBroadcastSystem : ISystem
         _tick++;
         if (_tick % 3 != 0) return;
 
-        // Resolve AckSeq: last InputState.Seq the server applied when this snapshot fires.
-        ushort ackSeq = 0;
-        foreach (var input in _netServer.InputBuffers.Values)
-        {
-            if (input.HasInput) { ackSeq = input.LatestSeq; break; }
-        }
-
         // Build delta: collect entries for entities with changed SimPosition.
         var entries = new List<SnapshotEntry>();
         var view = world.Query<SimPosition>();
@@ -61,6 +54,14 @@ public sealed class SnapshotBroadcastSystem : ISystem
 
         if (entries.Count == 0) return;
 
-        _netServer.BroadcastSnapshot(_tick, ackSeq, CollectionsMarshal.AsSpan(entries));
+        // Send each peer its own snapshot with the ackSeq for their specific input stream.
+        var span = CollectionsMarshal.AsSpan(entries);
+        foreach (var peer in _netServer.ConnectedPeers)
+        {
+            ushort peerAck = 0;
+            if (_netServer.InputBuffers.TryGetValue(peer, out var buf) && buf.HasInput)
+                peerAck = buf.LatestSeq;
+            _netServer.SendSnapshotTo(peer, _tick, peerAck, span);
+        }
     }
 }

@@ -10,6 +10,8 @@ internal sealed class ClientNetInputSystem : ISystem
     private readonly InputHistory _history;
     private ushort _seq;
 
+    public ushort LastSentSeq => (ushort)(_seq - 1);
+
     public ClientNetInputSystem(NetClient netClient, InputHistory history)
     {
         _netClient = netClient;

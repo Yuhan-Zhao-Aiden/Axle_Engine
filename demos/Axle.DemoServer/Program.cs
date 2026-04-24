@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Text.Json;
 using Axle.Core.AxleMath;
 using Axle.Ecs;
 using Axle.Net;
@@ -11,6 +12,12 @@ public class Program
 {
     public static void Main(string[] args)
     {
+        string settingsPath = Path.Combine(AppContext.BaseDirectory, "assets", "settings.json");
+        var jsonOpts = new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip };
+        var serverSettings = File.Exists(settingsPath)
+            ? JsonSerializer.Deserialize<ServerSettings>(File.ReadAllText(settingsPath), jsonOpts) ?? new ServerSettings()
+            : new ServerSettings();
+
         var world = new World();
         world.Register<SimPosition>();
         world.Register<Velocity>();
@@ -22,25 +29,36 @@ public class Program
         var map = MapLoader.Load(mapPath, GameMode.TopDown);
         var tileMap = new TileCollisionMap(map);
 
-        Fixed32 spawnX = Fixed32.Zero;
-        Fixed32 spawnY = Fixed32.Zero;
-        if (map.PlayerSpawns.Count > 0)
+        ITransport serverTransport = serverSettings.NetSim?.Enabled == true
+            ? new SimulatedTransport(new UdpTransport(), serverSettings.NetSim)
+            : new UdpTransport();
+        using var server = new NetServer(serverTransport);
+
+        // Spawn a new player entity for each connecting client.
+        int spawnIndex = 0;
+        server.OnClientConnected = endpoint =>
         {
-            spawnX = Fixed32.FromInt(map.PlayerSpawns[0].X * 32);
-            spawnY = Fixed32.FromInt(map.PlayerSpawns[0].Y * 32);
-        }
+            int si = spawnIndex++;
+            Fixed32 sx = Fixed32.Zero;
+            Fixed32 sy = Fixed32.Zero;
+            if (map.PlayerSpawns.Count > 0)
+            {
+                var spawn = map.PlayerSpawns[Math.Min(si, map.PlayerSpawns.Count - 1)];
+                sx = Fixed32.FromInt(spawn.X * 32);
+                sy = Fixed32.FromInt(spawn.Y * 32);
+            }
+            var e = world.CreateEntity();
+            world.Add(e, new SimPosition(sx, sy));
+            world.Add(e, new Velocity(Fixed32.Zero, Fixed32.Zero));
+            world.Add(e, new MoveInput(0, 0));
+            world.Add<LocalPlayer>(e);
+            world.Add(e, new PlayerCollider(Fixed32.FromInt(16), Fixed32.FromInt(16)));
+            return (e.Index, e.Version);
+        };
 
-        var player = world.CreateEntity();
-        world.Add(player, new SimPosition(spawnX, spawnY));
-        world.Add(player, new Velocity(Fixed32.Zero, Fixed32.Zero));
-        world.Add(player, new MoveInput(0, 0));
-        world.Add<LocalPlayer>(player);
-        world.Add(player, new PlayerCollider(Fixed32.FromInt(16), Fixed32.FromInt(16)));
-
-        using var server = new NetServer(new UdpTransport());
         server.Listen(7777);
 
-        var networkInput = new NetworkInputSystem(server.InputBuffers);
+        var networkInput = new NetworkInputSystem(server.InputBuffers, server.ClientEntities);
         var simRunner = new SimRunner(world,
             networkInput,
             new PlayerVelocitySystem(),
@@ -70,10 +88,7 @@ public class Program
                 accumulator -= fixedDt;
 
                 if (tick % (ulong)logIntervalTicks == 0)
-                {
-                    var pos = world.Store<SimPosition>().Get(player.Index);
-                    Console.WriteLine($"[Server] tick={tick}  player=({pos.X}, {pos.Y})");
-                }
+                    Console.WriteLine($"[Server] tick={tick}  clients={server.ConnectedPeers.Count}");
             }
 
             Thread.Sleep(1);
