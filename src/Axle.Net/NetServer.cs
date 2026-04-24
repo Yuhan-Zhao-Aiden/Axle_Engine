@@ -99,4 +99,18 @@ public sealed class NetServer : IDisposable
         _disposed = true;
         _transport.Stop();
     }
+
+    public void Broadcast(ReadOnlySpan<byte> payload)
+    {
+        foreach (var peer in _connectedPeers)
+            _transport.Send(peer, payload);
+    }
+
+    // Serialises and broadcasts a snapshot packet to all connected peers.
+    public void BroadcastSnapshot(ulong tickId, ushort ackSeq, ReadOnlySpan<SnapshotEntry> entries)
+    {
+        Span<byte> buf = stackalloc byte[Packet.SnapshotMaxBytes(entries.Length)];
+        if (Packet.TryWriteSnapshot(buf, tickId, ackSeq, entries, out int written))
+            Broadcast(buf[..written]);
+    }
 }
