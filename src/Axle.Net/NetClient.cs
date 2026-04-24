@@ -21,6 +21,9 @@ public sealed class NetClient : IDisposable
     // -1 until the first round-trip is measured.
     public long LatestRttMs => _ping.LatestRttMs;
 
+    public int AssignedEntityIndex   => _handshake.AssignedEntityIndex;
+    public int AssignedEntityVersion => _handshake.AssignedEntityVersion;
+
     public NetClient(ITransport transport)
     {
         _transport = transport;

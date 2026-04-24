@@ -1,0 +1,12 @@
+{
+  // Optional network simulator. Set "enabled": true to simulate latency/loss on the server side.
+  // baseDelayMs: one-way delay for outgoing server packets (50ms ≈ 50ms server→client delay).
+  // jitterMs: random ± variation per packet.
+  // lossPercent: 0–100 drop probability.
+  "netSim": {
+    "enabled": false,
+    "baseDelayMs": 50,
+    "jitterMs": 15,
+    "lossPercent": 2
+  }
+}

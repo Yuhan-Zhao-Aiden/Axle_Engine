@@ -25,11 +25,24 @@ internal static class Packet
         transport.Send(endpoint, buf);
     }
 
-    public static void WriteConnectAccept(ITransport transport, NetEndpoint endpoint)
+    // ConnectAccept wire format (9 bytes): [type:1][entityIndex:i32 LE][entityVersion:i32 LE]
+    public static void WriteConnectAccept(ITransport transport, NetEndpoint endpoint, int entityIndex, int entityVersion)
     {
-        Span<byte> buf = stackalloc byte[1];
+        Span<byte> buf = stackalloc byte[9];
         buf[0] = (byte)PacketType.ConnectAccept;
+        BinaryPrimitives.WriteInt32LittleEndian(buf[1..], entityIndex);
+        BinaryPrimitives.WriteInt32LittleEndian(buf[5..], entityVersion);
         transport.Send(endpoint, buf);
+    }
+
+    public static bool TryReadConnectAccept(byte[] payload, out int entityIndex, out int entityVersion)
+    {
+        entityIndex = -1;
+        entityVersion = -1;
+        if (payload is not { Length: >= 9 }) return false;
+        entityIndex = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(1));
+        entityVersion = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(5));
+        return true;
     }
 
     public static void WriteConnectReject(ITransport transport, NetEndpoint endpoint)

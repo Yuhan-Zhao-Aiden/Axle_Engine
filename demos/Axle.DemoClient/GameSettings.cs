@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Axle.Net;
 using Axle.Sim;
 
 namespace Axle.Client;
@@ -11,4 +12,7 @@ public sealed class GameSettings
 
     [JsonPropertyName("camera")]
     public CameraSettings Camera { get; init; } = new();
+
+    [JsonPropertyName("netSim")]
+    public NetSimSettings? NetSim { get; init; }
 }

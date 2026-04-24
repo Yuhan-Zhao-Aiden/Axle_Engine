@@ -104,11 +104,16 @@ public class Program
         // Optional network client — created when --net flag is provided.
         NetClient? netClient = null;
         ReconciliationApplicator? reconciliator = null;
+        ClientNetInputSystem? netInputSystem = null;
         if (useNet)
         {
-            netClient = new NetClient(new UdpTransport());
+            ITransport clientTransport = settings.NetSim?.Enabled == true
+                ? new SimulatedTransport(new UdpTransport(), settings.NetSim)
+                : new UdpTransport();
+            netClient = new NetClient(clientTransport);
             netClient.Connect(new NetEndpoint("127.0.0.1", 7777));
-            systems.Add(new ClientNetInputSystem(netClient, history));
+            netInputSystem = new ClientNetInputSystem(netClient, history);
+            systems.Add(netInputSystem);
 
             var ghost = world.CreateEntity();
             world.Add(ghost, new Transform(new Vector2f(spawnX.ToFloat(), spawnY.ToFloat())));
@@ -127,6 +132,9 @@ public class Program
 
         EngineLoop? loop = null;
         ulong netTick = 0;
+        bool serverEntitySet = false;
+        var remoteEntities = new Dictionary<(int index, int version), EntityId>();
+        ulong debugLogTick = 0;
 
         window.OnReady = () =>
         {
@@ -137,12 +145,65 @@ public class Program
         window.OnFrame = () =>
         {
             netClient?.Tick(netTick++);
+
+            // One-time: tell the reconciliator which server entity is ours.
+            if (!serverEntitySet && netClient?.State == ConnectionState.Connected)
+            {
+                reconciliator?.SetServerEntity(netClient.AssignedEntityIndex, netClient.AssignedEntityVersion);
+                serverEntitySet = true;
+                Console.WriteLine($"[Client] Connected — server entity {netClient.AssignedEntityIndex}");
+            }
+
             while (netClient is not null && netClient.TryDequeueSnapshot(out var snap))
             {
                 reconciliator?.Apply(snap);
+
+                // Update or create visual entities for remote players.
+                if (netClient.AssignedEntityIndex >= 0)
+                {
+                    foreach (var entry in snap.Entries)
+                    {
+                        // Skip our own server entity — reconciliator handles it.
+                        if (entry.EntityIndex == netClient.AssignedEntityIndex &&
+                            entry.EntityVersion == netClient.AssignedEntityVersion)
+                            continue;
+
+                        var key = (entry.EntityIndex, entry.EntityVersion);
+                        if (!remoteEntities.TryGetValue(key, out var remoteId))
+                        {
+                            float rx = (entry.Mask & ChangeMask.PositionX) != 0 ? entry.PositionX.ToFloat() : 0f;
+                            float ry = (entry.Mask & ChangeMask.PositionY) != 0 ? entry.PositionY.ToFloat() : 0f;
+                            remoteId = world.CreateEntity();
+                            world.Add(remoteId, new Transform(new Vector2f(rx, ry)));
+                            world.Add(remoteId, new RenderRect(new Vector2f(32f, 32f), new Color4(0f, 0.5f, 1f, 0.8f)));
+                            remoteEntities[key] = remoteId;
+                        }
+                        else
+                        {
+                            ref var rt = ref world.Get<Transform>(remoteId);
+                            float rx = (entry.Mask & ChangeMask.PositionX) != 0 ? entry.PositionX.ToFloat() : rt.Position.X;
+                            float ry = (entry.Mask & ChangeMask.PositionY) != 0 ? entry.PositionY.ToFloat() : rt.Position.Y;
+                            rt.Position = new Vector2f(rx, ry);
+                        }
+                    }
+                }
+
                 if (reconciliator is not null &&
                     (reconciliator.LastErrorX.RawValue != 0 || reconciliator.LastErrorY.RawValue != 0))
                     Console.WriteLine($"[Predict] tick={snap.TickId} ackSeq={snap.AckSeq} errX={reconciliator.LastErrorX} errY={reconciliator.LastErrorY}");
+            }
+
+            // Periodic debug log every 90 frames (~3 s at 30 Hz).
+            if (netClient is not null && netClient.State == ConnectionState.Connected && ++debugLogTick % 90 == 0)
+            {
+                int pending = reconciliator is not null ? history.PendingCount(reconciliator.LastAckedSeq) : 0;
+                ushort sent = netInputSystem?.LastSentSeq ?? 0;
+                ushort acked = reconciliator?.LastAckedSeq ?? 0;
+                float errTiles = reconciliator is not null
+                    ? MathF.Sqrt(MathF.Pow(reconciliator.LastErrorX.ToFloat(), 2) +
+                                 MathF.Pow(reconciliator.LastErrorY.ToFloat(), 2)) / 32f
+                    : 0f;
+                Console.WriteLine($"[Debug] RTT={netClient.LatestRttMs}ms | SentSeq={sent} AckedSeq={acked} Pending={pending} | Err={errTiles:F3}tiles");
             }
             loop?.Frame();
         };

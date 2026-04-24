@@ -16,5 +16,16 @@
     // World-space position used when mode is "fixed"
     "fixedX": 0,
     "fixedY": 0
+  },
+
+  // network simulator (Optional). Set "enabled": true to simulate latency/loss.
+  // baseDelayMs: one-way delay (50ms each side about 100ms RTT).
+  // jitterMs: random +- variation added per packet.
+  // lossPercent: 0–100 drop probability.
+  "netSim": {
+    "enabled": false,
+    "baseDelayMs": 50,
+    "jitterMs": 15,
+    "lossPercent": 2
   }
 }

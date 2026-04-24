@@ -15,6 +15,9 @@ internal sealed class HandshakeManager
 
     public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
 
+    public int AssignedEntityIndex   { get; private set; } = -1;
+    public int AssignedEntityVersion { get; private set; } = -1;
+
     public void BeginConnect(ITransport transport, NetEndpoint server, ulong tickIndex)
     {
         State = ConnectionState.Connecting;
@@ -38,11 +41,16 @@ internal sealed class HandshakeManager
         if (State != ConnectionState.Connecting) return;
 
         var type = Packet.TryReadType(packet.Payload);
-        State = type switch
+        if (type == PacketType.ConnectAccept)
         {
-            PacketType.ConnectAccept => ConnectionState.Connected,
-            PacketType.ConnectReject => ConnectionState.Disconnected,
-            _ => State,
-        };
+            Packet.TryReadConnectAccept(packet.Payload, out int idx, out int ver);
+            AssignedEntityIndex   = idx;
+            AssignedEntityVersion = ver;
+            State = ConnectionState.Connected;
+        }
+        else if (type == PacketType.ConnectReject)
+        {
+            State = ConnectionState.Disconnected;
+        }
     }
 }
