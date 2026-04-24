@@ -109,7 +109,12 @@ public class Program
             netClient = new NetClient(new UdpTransport());
             netClient.Connect(new NetEndpoint("127.0.0.1", 7777));
             systems.Add(new ClientNetInputSystem(netClient, history));
-            reconciliator = new ReconciliationApplicator(history, world, player, velocitySystem, movementSystem);
+
+            var ghost = world.CreateEntity();
+            world.Add(ghost, new Transform(new Vector2f(spawnX.ToFloat(), spawnY.ToFloat())));
+            world.Add(ghost, new RenderRect(new Vector2f(32f, 32f), new Color4(1f, 0f, 0f, 0.45f)));
+
+            reconciliator = new ReconciliationApplicator(history, world, player, velocitySystem, movementSystem, ghost);
             Console.WriteLine("[Client] Connecting to 127.0.0.1:7777...");
         }
 
@@ -133,7 +138,12 @@ public class Program
         {
             netClient?.Tick(netTick++);
             while (netClient is not null && netClient.TryDequeueSnapshot(out var snap))
+            {
                 reconciliator?.Apply(snap);
+                if (reconciliator is not null &&
+                    (reconciliator.LastErrorX.RawValue != 0 || reconciliator.LastErrorY.RawValue != 0))
+                    Console.WriteLine($"[Predict] tick={snap.TickId} ackSeq={snap.AckSeq} errX={reconciliator.LastErrorX} errY={reconciliator.LastErrorY}");
+            }
             loop?.Frame();
         };
 

@@ -1,3 +1,4 @@
+using Axle.Core.AxleMath;
 using Axle.Ecs;
 using Axle.Net;
 using Axle.Sim;
@@ -17,19 +18,25 @@ internal sealed class ReconciliationApplicator
     private readonly EntityId _player;
     private readonly PlayerVelocitySystem _velocitySystem;
     private readonly TileCollisionMovementSystem _movementSystem;
+    private readonly EntityId? _ghost;
+
+    public Fixed32 LastErrorX { get; private set; }
+    public Fixed32 LastErrorY { get; private set; }
 
     public ReconciliationApplicator(
         InputHistory history,
         World world,
         EntityId player,
         PlayerVelocitySystem velocitySystem,
-        TileCollisionMovementSystem movementSystem)
+        TileCollisionMovementSystem movementSystem,
+        EntityId? ghost = null)
     {
         _history = history;
         _world = world;
         _player = player;
         _velocitySystem = velocitySystem;
         _movementSystem = movementSystem;
+        _ghost = ghost;
     }
 
     public void Apply(SnapshotData snap)
@@ -42,8 +49,31 @@ internal sealed class ReconciliationApplicator
                 continue;
 
             ref var pos = ref _world.Get<SimPosition>(_player);
-            if ((entry.Mask & ChangeMask.PositionX) != 0) pos.X = entry.PositionX;
-            if ((entry.Mask & ChangeMask.PositionY) != 0) pos.Y = entry.PositionY;
+
+            // Capture predicted position before the warp to measure prediction error.
+            Fixed32 predictedX = pos.X;
+            Fixed32 predictedY = pos.Y;
+
+            if ((entry.Mask & ChangeMask.PositionX) != 0)
+            {
+                LastErrorX = predictedX - entry.PositionX;
+                pos.X = entry.PositionX;
+            }
+            if ((entry.Mask & ChangeMask.PositionY) != 0)
+            {
+                LastErrorY = predictedY - entry.PositionY;
+                pos.Y = entry.PositionY;
+            }
+
+            // Move the ghost entity to the server-authoritative position for visual debug.
+            if (_ghost.HasValue)
+            {
+                ref var gt = ref _world.Get<Transform>(_ghost.Value);
+                float gx = (entry.Mask & ChangeMask.PositionX) != 0 ? entry.PositionX.ToFloat() : gt.Position.X;
+                float gy = (entry.Mask & ChangeMask.PositionY) != 0 ? entry.PositionY.ToFloat() : gt.Position.Y;
+                gt.Position = new Vector2f(gx, gy);
+            }
+
             break;
         }
 
