@@ -1,0 +1,17 @@
+{
+  "player": {
+    "baseFolder": "assets/sprites/character",
+    "states": {
+      "idle": { "fps": 6,  "loop": true },
+      "walk": { "fps": 12, "loop": true },
+      "jump": { "fps": 1,  "loop": false },
+      "fall": { "fps": 4,  "loop": false }
+    }
+  },
+  "coin": {
+    "baseFolder": "assets/sprites/coin",
+    "states": {
+      "idle": { "fps": 14, "loop": true }
+    }
+  }
+}

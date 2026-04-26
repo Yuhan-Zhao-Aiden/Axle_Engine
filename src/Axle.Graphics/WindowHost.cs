@@ -54,6 +54,8 @@ public class WindowHost : GameWindow
     protected override void OnLoad()
     {
         base.OnLoad();
+        GL.Enable(EnableCap.Blend);
+        GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
         Renderer = new QuadRenderer();
         OnReady?.Invoke();
     }

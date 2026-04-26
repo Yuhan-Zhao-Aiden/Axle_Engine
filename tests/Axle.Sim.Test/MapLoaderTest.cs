@@ -213,4 +213,139 @@ public class MapLoaderTest
         Assert.Single(map.CoinSpawns);    Assert.Equal(new MapPoint(2, 0), map.CoinSpawns[0]);
         Assert.Single(map.EnemySpawns);   Assert.Equal(new MapPoint(3, 0), map.EnemySpawns[0]);
     }
+
+    // -----------------------------------------------------------------------
+    // TileSet overload — Parse(lines, TileSet, mode)
+    // -----------------------------------------------------------------------
+
+    /// <summary>Builds a minimal TileSet containing '#' (wall) and '.' (floor).</summary>
+    private static TileSet BasicTileSet() => TileSetLoader.Parse(
+        """
+        {
+            "tileSize": 32,
+            "tiles": {
+                "#": { "name": "Wall",  "sprite": "assets/wall.png",  "solid": true  },
+                ".": { "name": "Floor", "sprite": "assets/floor.png", "solid": false }
+            }
+        }
+        """,
+        contentRoot: "");
+
+    [Fact]
+    public void TileSet_SolidTile_IsWall()
+    {
+        TileSet ts = BasicTileSet();
+        MapData map = MapLoader.Parse(["###"], ts);
+
+        Assert.True(map.TryGetTile(0, 0, out TileType t));
+        Assert.Equal(TileType.Wall, t);
+    }
+
+    [Fact]
+    public void TileSet_NonSolidTile_IsFloor()
+    {
+        TileSet ts = BasicTileSet();
+        MapData map = MapLoader.Parse(["..."], ts);
+
+        Assert.True(map.TryGetTile(0, 0, out TileType t));
+        Assert.Equal(TileType.Floor, t);
+    }
+
+    [Fact]
+    public void TileSet_UnknownChar_Throws()
+    {
+        TileSet ts = BasicTileSet();
+        // '@' is not in the TileSet — must throw
+        Assert.Throws<MapParseException>(() => MapLoader.Parse(["#@."], ts));
+    }
+
+    [Fact]
+    public void TileSet_PlayerSpawn_Recorded()
+    {
+        TileSet ts = TileSetLoader.Parse(
+            """
+            {
+                "tileSize": 32,
+                "tiles": {
+                    "#": { "name": "Wall",        "sprite": "a.png", "solid": true  },
+                    ".": { "name": "Floor",       "sprite": "b.png", "solid": false },
+                    "A": { "name": "PlayerSpawn", "sprite": "c.png", "solid": false, "spawn": "player" }
+                }
+            }
+            """,
+            contentRoot: "");
+
+        MapData map = MapLoader.Parse(["#A#"], ts);
+
+        Assert.Single(map.PlayerSpawns);
+        Assert.Equal(new MapPoint(1, 0), map.PlayerSpawns[0]);
+    }
+
+    [Fact]
+    public void TileSet_CoinSpawn_Recorded()
+    {
+        TileSet ts = TileSetLoader.Parse(
+            """
+            {
+                "tileSize": 32,
+                "tiles": {
+                    "#": { "name": "Wall",  "sprite": "a.png", "solid": true  },
+                    ".": { "name": "Floor", "sprite": "b.png", "solid": false },
+                    "C": { "name": "Coin",  "sprite": "c.png", "solid": false, "entity": "coin" }
+                }
+            }
+            """,
+            contentRoot: "");
+
+        MapData map = MapLoader.Parse(["#C#"], ts);
+
+        Assert.Single(map.CoinSpawns);
+        Assert.Equal(new MapPoint(1, 0), map.CoinSpawns[0]);
+    }
+
+    [Fact]
+    public void TileSet_TryGetSymbol_ReturnsOriginalChar()
+    {
+        TileSet ts = BasicTileSet();
+        MapData map = MapLoader.Parse(["#."], ts);
+
+        Assert.True(map.TryGetSymbol(0, 0, out char wall));
+        Assert.Equal('#', wall);
+
+        Assert.True(map.TryGetSymbol(1, 0, out char floor));
+        Assert.Equal('.', floor);
+    }
+
+    [Fact]
+    public void TileSet_TryGetSymbol_OutOfBounds_ReturnsFalse()
+    {
+        TileSet ts = BasicTileSet();
+        MapData map = MapLoader.Parse(["#"], ts);
+
+        Assert.False(map.TryGetSymbol(-1, 0, out _));
+        Assert.False(map.TryGetSymbol( 0, -1, out _));
+        Assert.False(map.TryGetSymbol( 1,  0, out _));
+    }
+
+    [Fact]
+    public void TileSet_EnemySpawn_Recorded()
+    {
+        TileSet ts = TileSetLoader.Parse(
+            """
+            {
+                "tileSize": 32,
+                "tiles": {
+                    "#": { "name": "Wall",  "sprite": "a.png", "solid": true  },
+                    ".": { "name": "Floor", "sprite": "b.png", "solid": false },
+                    "E": { "name": "Enemy", "sprite": "e.png", "solid": false, "spawn": "enemy" }
+                }
+            }
+            """,
+            contentRoot: "");
+
+        MapData map = MapLoader.Parse(["#E#"], ts);
+
+        Assert.Single(map.EnemySpawns);
+        Assert.Equal(new MapPoint(1, 0), map.EnemySpawns[0]);
+    }
 }

@@ -1,0 +1,6 @@
+{
+    "tileSize": 32,
+    "tiles": {
+        "#": { "name": "Wall",  "sprite": "assets/tiles/wall.png", "solid": true  }
+    }
+}
