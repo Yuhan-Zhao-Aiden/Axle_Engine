@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Axle.Core;
 using Axle.Ecs;
 using Axle.Graphics;
@@ -16,6 +17,9 @@ public sealed class RenderRunner : IRenderStage
     private readonly Func<Camera> _getCamera;
     private RenderSystem? _render;
     private MapRenderSystem? _mapRender;
+    private AnimationSystem? _animation;
+    private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+    private double _lastFrameTime;
 
     public RenderRunner(World world, SyncTransformSystem sync, Func<Camera> getCamera)
     {
@@ -24,15 +28,24 @@ public sealed class RenderRunner : IRenderStage
         _getCamera = getCamera;
     }
 
-    public void Initialize(QuadRenderer renderer, MapData? map = null)
+    public void Initialize(QuadRenderer renderer, MapData? map = null,
+        IReadOnlyDictionary<char, Texture2D>? textures = null,
+        AnimationSystem? animation = null)
     {
         _render = new RenderSystem(renderer);
         if (map is not null)
-            _mapRender = new MapRenderSystem(map, renderer);
+            _mapRender = new MapRenderSystem(map, renderer, textures);
+        _animation = animation;
     }
 
     public void Draw(float alpha)
     {
+        double now = _stopwatch.Elapsed.TotalSeconds;
+        float dt = Math.Clamp((float)(now - _lastFrameTime), 0f, 0.1f);
+        _lastFrameTime = now;
+
+        _animation?.Run(_world, dt);
+
         var camera = _getCamera();
         _mapRender?.Render(camera);
         _sync.Run(_world);

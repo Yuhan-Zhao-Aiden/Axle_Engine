@@ -21,11 +21,23 @@ public class Program
         // regardless of which directory dotnet run is invoked from.
         string mapPath      = Path.Combine(AppContext.BaseDirectory, "assets", "test.map");
         string settingsPath = Path.Combine(AppContext.BaseDirectory, "assets", "settings.json");
+        string tilesPath    = Path.Combine(AppContext.BaseDirectory, "assets", "test.tiles.json");
+        string spritesPath  = Path.Combine(AppContext.BaseDirectory, "assets", "sprites.json");
+        string contentRoot  = AppContext.BaseDirectory;
 
         var jsonOpts = new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip };
         var settings = JsonSerializer.Deserialize<GameSettings>(File.ReadAllText(settingsPath), jsonOpts) ?? new GameSettings();
 
         MapData map = MapLoader.Load(mapPath, settings.Mode);
+
+        // Optional: load tile sprite mappings if a companion .tiles.json exists.
+        // When absent, rendering falls back to colored squares (no behaviour change).
+        TileSet? tileSet = null;
+        if (File.Exists(tilesPath))
+        {
+            try { tileSet = TileSetLoader.Load(tilesPath, contentRoot); }
+            catch (Exception ex) { Console.WriteLine($"[Warn] tiles.json load failed: {ex.Message}"); }
+        }
 
         var camController = new CameraController(settings.Camera, map);
 
@@ -35,6 +47,7 @@ public class Program
         // Register stores
         world.Register<Transform>();
         world.Register<RenderRect>();
+        world.Register<RenderSprite>();
         world.Register<SimPosition>();
         world.Register<Velocity>();
         world.Register<MoveInput>();
@@ -42,6 +55,7 @@ public class Program
         world.Register<PlayerCollider>();
         world.Register<CollisionLayer>();
         world.Register<Collectible>();
+        world.Register<SpriteAnimator>();
 
         // Spawn player at first A spawn, or origin if none present
         Fixed32 spawnX = Fixed32.Zero;
@@ -136,9 +150,99 @@ public class Program
         var remoteEntities = new Dictionary<(int index, int version), EntityId>();
         ulong debugLogTick = 0;
 
+        var animSystem = new AnimationSystem(settings.Mode);
+
         window.OnReady = () =>
         {
-            renderRunner.Initialize(window.Renderer, map);
+            // Build texture cache from TileSet (must happen on GL thread, inside OnReady).
+            Dictionary<char, Texture2D>? textures = null;
+            if (tileSet is not null)
+            {
+                textures = new Dictionary<char, Texture2D>();
+                foreach (var (sym, def) in tileSet.Tiles)
+                {
+                    if (string.IsNullOrEmpty(def.SpritePath)) continue;
+                    string absPath = Path.Combine(contentRoot, def.SpritePath);
+                    try   { textures[sym] = Texture2D.Load(absPath); }
+                    catch (Exception ex) { Console.WriteLine($"[Warn] Texture load failed for '{sym}': {ex.Message}"); }
+                }
+            }
+
+            // Load sprite animations declared in sprites.json.
+            // For each entity type, each state maps to a subfolder of numbered PNGs (1.png, 2.png, ...).
+            // Missing folders/files are silently skipped; entities keep their RenderRect fallback.
+            if (File.Exists(spritesPath))
+            {
+                try
+                {
+                    var spriteConfig = JsonSerializer.Deserialize<Dictionary<string, EntityAnimConfig>>(
+                        File.ReadAllText(spritesPath), jsonOpts);
+
+                    if (spriteConfig is not null)
+                    {
+                        // Loads all numerically-named PNGs from {contentRoot}/{baseFolder}/{state}/
+                        AnimationClip? LoadClip(string stateName, AnimStateConfig cfg, string baseFolder)
+                        {
+                            string dir = Path.Combine(contentRoot, baseFolder, stateName);
+                            if (!Directory.Exists(dir)) return null;
+                            var frameFiles = Directory.GetFiles(dir, "*.png")
+                                .Where(f => int.TryParse(Path.GetFileNameWithoutExtension(f), out _))
+                                .OrderBy(f => int.Parse(Path.GetFileNameWithoutExtension(f)))
+                                .ToArray();
+                            if (frameFiles.Length == 0) return null;
+                            var frames = frameFiles.Select(f => Texture2D.Load(f)).ToArray();
+                            return new AnimationClip(stateName, frames, cfg.Fps, cfg.Loop);
+                        }
+
+                        if (spriteConfig.TryGetValue("player", out var playerCfg))
+                        {
+                            var clips = new Dictionary<string, AnimationClip>();
+                            foreach (var (state, cfg) in playerCfg.States)
+                            {
+                                var clip = LoadClip(state, cfg, playerCfg.BaseFolder);
+                                if (clip is not null) clips[state] = clip;
+                            }
+                            if (clips.Count > 0)
+                            {
+                                string defClip = clips.ContainsKey("idle") ? "idle" : clips.Keys.First();
+                                var firstTex = clips[defClip].Frames[0];
+                                world.Remove<RenderRect>(player);
+                                world.Add(player, new RenderSprite(firstTex, new Vector2f(32f, 32f)));
+                                world.Add(player, new SpriteAnimator(clips, "idle", new Vector2f(32f, 32f)));
+                            }
+                        }
+
+                        if (spriteConfig.TryGetValue("coin", out var coinCfg))
+                        {
+                            var clips = new Dictionary<string, AnimationClip>();
+                            foreach (var (state, cfg) in coinCfg.States)
+                            {
+                                var clip = LoadClip(state, cfg, coinCfg.BaseFolder);
+                                if (clip is not null) clips[state] = clip;
+                            }
+                            if (clips.Count > 0)
+                            {
+                                string defClip = clips.ContainsKey("idle") ? "idle" : clips.Keys.First();
+                                var firstTex = clips[defClip].Frames[0];
+                                // Collect before modifying to avoid mutating during iteration.
+                                var coinIndexes = new List<int>();
+                                foreach (var item in world.Query<Collectible, RenderRect>())
+                                    coinIndexes.Add(item.Entity);
+                                foreach (var idx in coinIndexes)
+                                {
+                                    var coinId = world.GetEntityId(idx);
+                                    world.Remove<RenderRect>(coinId);
+                                    world.Add(coinId, new RenderSprite(firstTex, new Vector2f(32f, 32f)));
+                                    world.Add(coinId, new SpriteAnimator(clips, "idle", new Vector2f(32f, 32f)));
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex) { Console.WriteLine($"[Warn] sprites.json load failed: {ex.Message}"); }
+            }
+
+            renderRunner.Initialize(window.Renderer, map, textures, animSystem);
             loop = new EngineLoop(simRunner, renderRunner);
         };
 
