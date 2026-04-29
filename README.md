@@ -3,9 +3,20 @@
 ![Logo](./docs/image/Frame%201.svg)
 ![Axle Engine](./docs/image/Screenshot%202026-03-29%20005013.png)
 
-Axle Engine is a 2D game engine in C# built around OpenTK. The project is aimed at authoritative multiplayer games, with deterministic simulation, a lightweight ECS core, and a clean split between simulation, rendering, and platform concerns.
+Axle Engine is a 2D game engine in C# built around OpenTK. It supports multi-player, platformer and top-down mode.
+The Axle Engine is aiming for a authoritative multiplayer server, with deterministic simulation, a lightweight ECS core.
 
-The current focus is MVP infrastructure rather than content tooling or advanced graphics. The design prioritizes correctness, fixed-step simulation, and architecture that can support prediction, reconciliation, interpolation, and replication later.
+The Axle Engine simplifies level building by using a text mapping system. Users can use special characters like '#' and '.' to draw the map in a .map file
+
+Example level1.map:
+
+```
+################
+#..............#
+#.....A........#
+#..............#
+################
+```
 
 ## Architecture
 
