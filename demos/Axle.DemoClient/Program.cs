@@ -119,6 +119,7 @@ public class Program
         NetClient? netClient = null;
         ReconciliationApplicator? reconciliator = null;
         ClientNetInputSystem? netInputSystem = null;
+        RemoteInterpolationSystem? remoteInterp = null;
         if (useNet)
         {
             ITransport clientTransport = settings.NetSim?.Enabled == true
@@ -134,6 +135,7 @@ public class Program
             world.Add(ghost, new RenderRect(new Vector2f(32f, 32f), new Color4(1f, 0f, 0f, 0.45f)));
 
             reconciliator = new ReconciliationApplicator(history, world, player, velocitySystem, movementSystem, ghost);
+            remoteInterp = new RemoteInterpolationSystem();
             Console.WriteLine("[Client] Connecting to 127.0.0.1:7777...");
         }
 
@@ -242,7 +244,7 @@ public class Program
                 catch (Exception ex) { Console.WriteLine($"[Warn] sprites.json load failed: {ex.Message}"); }
             }
 
-            renderRunner.Initialize(window.Renderer, map, textures, animSystem);
+            renderRunner.Initialize(window.Renderer, map, textures, animSystem, remoteInterp);
             loop = new EngineLoop(simRunner, renderRunner);
         };
 
@@ -262,6 +264,10 @@ public class Program
             {
                 reconciliator?.Apply(snap);
 
+                // Advance the interpolation clock once per snapshot.
+                double serverTimeMs = snap.TickId * (1000.0 / 30.0);
+                remoteInterp?.UpdateClock(serverTimeMs, snap.ReceivedMs);
+
                 // Update or create visual entities for remote players.
                 if (netClient.AssignedEntityIndex >= 0)
                 {
@@ -273,22 +279,24 @@ public class Program
                             continue;
 
                         var key = (entry.EntityIndex, entry.EntityVersion);
+                        float rx = (entry.Mask & ChangeMask.PositionX) != 0 ? entry.PositionX.ToFloat() : 0f;
+                        float ry = (entry.Mask & ChangeMask.PositionY) != 0 ? entry.PositionY.ToFloat() : 0f;
+
                         if (!remoteEntities.TryGetValue(key, out var remoteId))
                         {
-                            float rx = (entry.Mask & ChangeMask.PositionX) != 0 ? entry.PositionX.ToFloat() : 0f;
-                            float ry = (entry.Mask & ChangeMask.PositionY) != 0 ? entry.PositionY.ToFloat() : 0f;
+                            // First time we see this entity: create it with a placeholder position.
+                            // The interpolation system will move it to the correct place once it
+                            // has accumulated enough samples.
                             remoteId = world.CreateEntity();
                             world.Add(remoteId, new Transform(new Vector2f(rx, ry)));
                             world.Add(remoteId, new RenderRect(new Vector2f(32f, 32f), new Color4(0f, 0.5f, 1f, 0.8f)));
                             remoteEntities[key] = remoteId;
                         }
-                        else
-                        {
-                            ref var rt = ref world.Get<Transform>(remoteId);
-                            float rx = (entry.Mask & ChangeMask.PositionX) != 0 ? entry.PositionX.ToFloat() : rt.Position.X;
-                            float ry = (entry.Mask & ChangeMask.PositionY) != 0 ? entry.PositionY.ToFloat() : rt.Position.Y;
-                            rt.Position = new Vector2f(rx, ry);
-                        }
+
+                        // Push the authoritative sample into the interpolation buffer.
+                        // The system lerps between samples each render frame instead of
+                        // warping Transform directly on every snapshot arrival.
+                        remoteInterp?.PushSample(remoteId, serverTimeMs, rx, ry);
                     }
                 }
 

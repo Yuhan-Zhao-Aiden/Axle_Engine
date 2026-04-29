@@ -18,6 +18,7 @@ public sealed class RenderRunner : IRenderStage
     private RenderSystem? _render;
     private MapRenderSystem? _mapRender;
     private AnimationSystem? _animation;
+    private RemoteInterpolationSystem? _interpolation;
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
     private double _lastFrameTime;
 
@@ -30,12 +31,14 @@ public sealed class RenderRunner : IRenderStage
 
     public void Initialize(QuadRenderer renderer, MapData? map = null,
         IReadOnlyDictionary<char, Texture2D>? textures = null,
-        AnimationSystem? animation = null)
+        AnimationSystem? animation = null,
+        RemoteInterpolationSystem? interpolation = null)
     {
         _render = new RenderSystem(renderer);
         if (map is not null)
             _mapRender = new MapRenderSystem(map, renderer, textures);
         _animation = animation;
+        _interpolation = interpolation;
     }
 
     public void Draw(float alpha)
@@ -49,6 +52,7 @@ public sealed class RenderRunner : IRenderStage
         var camera = _getCamera();
         _mapRender?.Render(camera);
         _sync.Run(_world);
+        _interpolation?.Run(_world);
         _render!.Render(_world, camera);
     }
 }
